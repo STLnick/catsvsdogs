@@ -1,9 +1,9 @@
 package main
 
 import (
-	"bytes" // will be used for loading embedded imgs
+	"bytes"
 	"fmt"
-	"image" // will be used for loading embedded imgs and rects
+	"image"
 	"image/color"
 	"log"
 
@@ -73,16 +73,29 @@ func NewSprite(frameCount int, img *ebiten.Image) Sprite {
 	}
 }
 
+type CharState string
+
+const (
+	CharStateAttack CharState = "Attack"
+	CharStateDeath  CharState = "Death"
+	CharStateHurt   CharState = "Hurt"
+	CharStateIdle   CharState = "Idle"
+	CharStateWalk   CharState = "Walk"
+)
+
 type Character struct {
-	hp            int
-	pts           int
-	pos           Position
-	sprites       map[string]Sprite
-	currentSprite Sprite
+	hp        int
+	pts       int
+	pos       Position
+	state     CharState
+	sprites   map[CharState]Sprite
+	spriteCtr int
+	ctrStart  int
+	isCpu     bool
 }
 
 func NewCharacter(pos Position, isCpu bool) *Character {
-	sprites := make(map[string]Sprite)
+	sprites := make(map[CharState]Sprite)
 	var (
 		atkImg   image.Image
 		deathImg image.Image
@@ -116,44 +129,48 @@ func NewCharacter(pos Position, isCpu bool) *Character {
 		panicIfErr(err)
 	}
 
-	sprites["Attack"] = NewSprite(4, ebiten.NewImageFromImage(atkImg))
-	sprites["Death"] = NewSprite(4, ebiten.NewImageFromImage(deathImg))
-	sprites["Hurt"] = NewSprite(2, ebiten.NewImageFromImage(hurtImg))
-	sprites["Idle"] = NewSprite(4, ebiten.NewImageFromImage(idleImg))
-	sprites["Walk"] = NewSprite(6, ebiten.NewImageFromImage(walkImg))
+	sprites[CharStateAttack] = NewSprite(4, ebiten.NewImageFromImage(atkImg))
+	sprites[CharStateDeath] = NewSprite(4, ebiten.NewImageFromImage(deathImg))
+	sprites[CharStateHurt] = NewSprite(2, ebiten.NewImageFromImage(hurtImg))
+	sprites[CharStateIdle] = NewSprite(4, ebiten.NewImageFromImage(idleImg))
+	sprites[CharStateWalk] = NewSprite(6, ebiten.NewImageFromImage(walkImg))
 
 	return &Character{
-		hp:            100,
-		pts:           0,
-		pos:           pos,
-		sprites:       sprites,
-		currentSprite: sprites[testState],
+		hp:      100,
+		pts:     0,
+		pos:     pos,
+		sprites: sprites,
+		state:   CharStateIdle,
+		isCpu:   isCpu,
 	}
 }
 
 var (
 	frameHeight = 48
 	frameWidth  = 48
-	testCounter = 0
-	testState   = "Idle"
 )
+
+func (p *Character) CurrentSprite() Sprite {
+	return p.sprites[p.state]
+}
 
 func (p *Character) GetImgOpts() *ebiten.DrawImageOptions {
 	op := &ebiten.DrawImageOptions{}
-	op.GeoM.Translate(p.pos.x, p.pos.y)
+	if p.isCpu {
+		op.GeoM.Scale(-1, 1)
+		op.GeoM.Translate(p.pos.x+float64(frameWidth), p.pos.y)
+	} else {
+		op.GeoM.Translate(p.pos.x, p.pos.y)
+	}
 	return op
 }
 
 func (p *Character) DrawFrame(screen *ebiten.Image, count int) {
 	// Move rectangle to new frame of sprite
-	pos := (count / 8) % p.currentSprite.frameCount
+	pos := ((count-p.ctrStart) / 8) % p.CurrentSprite().frameCount
 	sx := pos * frameWidth
 	rect := image.Rect(sx, 0, sx+frameWidth, frameHeight)
-	img := p.currentSprite.img.SubImage(rect).(*ebiten.Image)
-
-	// Adjust position of image
-	// op := &ebiten.DrawImageOptions{}
-	// op.GeoM.Translate(p.pos.x, p.pos.y)
+	img := p.CurrentSprite().img.SubImage(rect).(*ebiten.Image)
 	op := p.GetImgOpts()
 
 	screen.DrawImage(img, op)
@@ -203,8 +220,14 @@ type Game struct {
 func (g *Game) Init() {
 	g.initialized = true
 	g.state = MAIN_MENU
-	g.player = NewCharacter(Position{x: 75, y: 100}, false)
-	g.cpu = NewCharacter(Position{x: 150, y: 100}, true)
+	g.player = NewCharacter(Position{
+		x: (screenWidth / 3) - (float64(frameWidth) / 2),
+		y: (screenHeight / 2) - (float64(frameHeight) / 2),
+	}, false)
+	g.cpu = NewCharacter(Position{
+		x: (screenWidth / 3 * 2) - (float64(frameWidth) / 2),
+		y: (screenHeight / 2) - (float64(frameHeight) / 2),
+	}, true)
 }
 
 func (g *Game) Update() error {
@@ -219,16 +242,15 @@ func (g *Game) Update() error {
 		return ebiten.Termination
 	}
 
-	//resetBgImg()
-
 	// Pause
 	if inpututil.IsKeyJustPressed(ebiten.KeyEscape) {
 		resetBgImg()
 
 		if g.state == PAUSED {
 			fmt.Println("STATE: paused --to-> main menu")
+			temp := g.lastState
 			g.lastState = g.state
-			g.state = MAIN_MENU
+			g.state = temp
 		} else {
 			fmt.Println("STATE: main menu --to-> paused")
 			g.lastState = g.state
@@ -245,16 +267,6 @@ func (g *Game) Update() error {
 			g.state = BATTLE
 		}
 	case BATTLE:
-		// !!! TESTING
-		if g.count > 240 {
-			resetBgImg()
-			g.lastState = g.state
-			fmt.Printf("STATE: (!testing!) %s --to-> %s (count %d)\n", g.state.ToString(), WON.ToString(), g.count)
-			g.count = 0
-			//g.state = WON
-			g.state = LOST
-		}
-
 		if g.player.hp <= 0 {
 			resetBgImg()
 			g.lastState = g.state
@@ -265,6 +277,19 @@ func (g *Game) Update() error {
 			g.lastState = g.state
 			fmt.Printf("STATE: %s --to-> %s (count %d)\n", g.state.ToString(), WON.ToString(), g.count)
 			g.state = WON
+		}
+
+		if inpututil.IsKeyJustPressed(ebiten.KeySpace) && g.player.state != CharStateAttack {
+			fmt.Println("ATK start")
+			g.player.state = CharStateAttack
+			g.player.spriteCtr = 4
+			g.player.ctrStart = g.count
+		}
+
+		if g.player.state != CharStateIdle && g.player.spriteCtr == 0 {
+			fmt.Println("Action finish")
+			g.player.state = CharStateIdle
+			g.player.ctrStart = g.count
 		}
 	case WON:
 		if inpututil.IsKeyJustPressed(ebiten.KeyEnter) {
@@ -317,17 +342,27 @@ func (g *Game) Draw(screen *ebiten.Image) {
 		x, y = (screenWidth/2)-(w/2), (screenHeight/3)+(h/2)
 		text.Draw(bgImg, subtext, smallFont, x, y, colors.Secondary)
 	case BATTLE:
-		heading := "- Battle! -"
+		heading, subtext := "- Battle! -", "Press SPACE to attack!"
 		smallFont := getSmallFont()
 		textRect, _ := font.BoundString(smallFont, heading)
 		w, h := (textRect.Max.X - textRect.Min.X).Round(), (textRect.Max.Y - textRect.Min.Y).Round()
 		x, y := (screenWidth/2)-(w/2), h*2
 		text.Draw(bgImg, heading, smallFont, x, y, colors.Red)
-
-		// draw sprites
+		// Subtext
+		textRect, _ = font.BoundString(smallFont, subtext)
+		w = (textRect.Max.X - textRect.Min.X).Round()
+		x, y = (screenWidth/2)-(w/2), h*4
+		text.Draw(bgImg, subtext, smallFont, x, y, colors.Black)
+		// Sprites
 		g.player.DrawFrame(screen, g.count)
+		if g.player.state == CharStateAttack {
+			if (g.count-g.player.ctrStart)%8 == 0 {
+				g.player.spriteCtr -= 1
+			}
+
+			fmt.Println("ATK tick :: ", g.player.spriteCtr)
+		}
 		g.cpu.DrawFrame(screen, g.count)
-		// maybe text saying attack command?
 	case WON:
 		heading, subtext := "VICTORY!", "Press enter to return to main menu"
 		baseFont := getBaseFont()
