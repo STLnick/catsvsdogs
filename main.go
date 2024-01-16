@@ -334,6 +334,7 @@ func (g *Game) Update() error {
 		} else if g.player.state == CharStateAttack && g.player.spriteCtr == 0 {
 			if g.cpu.state != CharStateHurt && g.cpu.state != CharStateDeath {
 				g.cpu.TakeDamage(g.count, g.player.atk)
+				resetBgImg()
 			}
 		} else if g.cpu.state == CharStateHurt && g.cpu.spriteCtr == 0 && g.cpu.remainingHp == 0 {
 			g.cpu.ChangeState(CharStateDeath, g.count)
@@ -412,7 +413,18 @@ func (g *Game) Draw(screen *ebiten.Image) {
 		text.Draw(bgImg, subtext, smallFont, x, y, colors.Black)
 
 		// Health Bars
-		// TODO: show health as simple "remaining/starting" display
+		// Player HP
+		playerHpStr := fmt.Sprintf("HP %d/%d", g.player.remainingHp, g.player.hp)
+		textRect, _ = font.BoundString(smallFont, playerHpStr)
+		w = (textRect.Max.X - textRect.Min.X).Round()
+		x, y = (screenWidth/3)-(w/2), h*5
+		text.Draw(bgImg, playerHpStr, smallFont, x, y, colors.White)
+		// CPU HP
+		cpuHpStr := fmt.Sprintf("HP %d/%d", g.cpu.remainingHp, g.cpu.hp)
+		textRect, _ = font.BoundString(smallFont, cpuHpStr)
+		w = (textRect.Max.X - textRect.Min.X).Round()
+		x, y = ((screenWidth/3)*2)-(w/2), h*5
+		text.Draw(bgImg, cpuHpStr, smallFont, x, y, colors.White)
 
 		// Sprites
 		g.player.DrawFrame(screen, g.count)
@@ -477,6 +489,7 @@ var colors = struct {
 	Green     color.Color
 	Red       color.Color
 	Black     color.Color
+	White     color.Color
 	Grey      color.Color
 }{
 	Primary:   color.RGBA{80, 220, 20, 255},
@@ -484,6 +497,7 @@ var colors = struct {
 	Green:     color.RGBA{0, 255, 0, 255},
 	Red:       color.RGBA{255, 0, 0, 255},
 	Black:     color.Black,
+	White:     color.White,
 	Grey:      color.RGBA{20, 20, 20, 255},
 }
 
