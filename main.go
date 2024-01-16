@@ -94,11 +94,11 @@ func (g *Game) Init() {
 
 func (g *Game) SetupBattle() {
 	g.state = BATTLE
-	g.player = characters.NewCharacter(characters.Position{
+	g.player = characters.NewCharacter("cat2", characters.Position{
 		X: (globals.ScreenWidth / 3) - float64(globals.FrameWidth),
 		Y: (globals.ScreenHeight / 2) - float64(globals.FrameHeight),
 	}, false)
-	g.cpu = characters.NewCharacter(characters.Position{
+	g.cpu = characters.NewCharacter("dog2", characters.Position{
 		X: (globals.ScreenWidth / 3 * 2) - float64(globals.FrameWidth),
 		Y: (globals.ScreenHeight / 2) - float64(globals.FrameHeight),
 	}, true)

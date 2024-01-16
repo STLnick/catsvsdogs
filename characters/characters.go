@@ -5,9 +5,10 @@ import (
 	"fmt"
 	"image"
 
-	// will delete
 	"github.com/STLnick/catsvsdogs/characters/cat1"
+	"github.com/STLnick/catsvsdogs/characters/cat2"
 	"github.com/STLnick/catsvsdogs/characters/dog1"
+	"github.com/STLnick/catsvsdogs/characters/dog2"
 
 	"github.com/STLnick/catsvsdogs/globals"
 
@@ -56,8 +57,7 @@ type Character struct {
 	IsCpu       bool
 }
 
-func NewCharacter(pos Position, isCpu bool) *Character {
-	sprites := make(map[CharState]Sprite)
+func getImages(character string) map[CharState]*ebiten.Image {
 	var (
 		atkImg   image.Image
 		deathImg image.Image
@@ -67,7 +67,8 @@ func NewCharacter(pos Position, isCpu bool) *Character {
 		err      error
 	)
 
-	if !isCpu {
+    switch character {
+    case "cat1":
 		atkImg, _, err = image.Decode(bytes.NewReader(cat1.Attack_png))
 		utils.PanicIfErr(err)
 		deathImg, _, err = image.Decode(bytes.NewReader(cat1.Death_png))
@@ -78,7 +79,20 @@ func NewCharacter(pos Position, isCpu bool) *Character {
 		utils.PanicIfErr(err)
 		walkImg, _, err = image.Decode(bytes.NewReader(cat1.Walk_png))
 		utils.PanicIfErr(err)
-	} else {
+        break;
+    case "cat2":
+		atkImg, _, err = image.Decode(bytes.NewReader(cat2.Attack_png))
+		utils.PanicIfErr(err)
+		deathImg, _, err = image.Decode(bytes.NewReader(cat2.Death_png))
+		utils.PanicIfErr(err)
+		hurtImg, _, err = image.Decode(bytes.NewReader(cat2.Hurt_png))
+		utils.PanicIfErr(err)
+		idleImg, _, err = image.Decode(bytes.NewReader(cat2.Idle_png))
+		utils.PanicIfErr(err)
+		walkImg, _, err = image.Decode(bytes.NewReader(cat2.Walk_png))
+		utils.PanicIfErr(err)
+        break;
+    case "dog1":
 		atkImg, _, err = image.Decode(bytes.NewReader(dog1.Attack_png))
 		utils.PanicIfErr(err)
 		deathImg, _, err = image.Decode(bytes.NewReader(dog1.Death_png))
@@ -89,14 +103,39 @@ func NewCharacter(pos Position, isCpu bool) *Character {
 		utils.PanicIfErr(err)
 		walkImg, _, err = image.Decode(bytes.NewReader(dog1.Walk_png))
 		utils.PanicIfErr(err)
-	}
+        break;
+    case "dog2":
+		atkImg, _, err = image.Decode(bytes.NewReader(dog2.Attack_png))
+		utils.PanicIfErr(err)
+		deathImg, _, err = image.Decode(bytes.NewReader(dog2.Death_png))
+		utils.PanicIfErr(err)
+		hurtImg, _, err = image.Decode(bytes.NewReader(dog2.Hurt_png))
+		utils.PanicIfErr(err)
+		idleImg, _, err = image.Decode(bytes.NewReader(dog2.Idle_png))
+		utils.PanicIfErr(err)
+		walkImg, _, err = image.Decode(bytes.NewReader(dog2.Walk_png))
+		utils.PanicIfErr(err)
+        break;
+    }
 
-	sprites[CharStateAttack] = NewSprite(4, ebiten.NewImageFromImage(atkImg))
-	sprites[CharStateDeath] = NewSprite(4, ebiten.NewImageFromImage(deathImg))
-	sprites[CharStateHurt] = NewSprite(2, ebiten.NewImageFromImage(hurtImg))
-	sprites[CharStateIdle] = NewSprite(4, ebiten.NewImageFromImage(idleImg))
-	sprites[CharStateWalk] = NewSprite(6, ebiten.NewImageFromImage(walkImg))
+    return map[CharState]*ebiten.Image{
+        CharStateAttack: ebiten.NewImageFromImage(atkImg),
+        CharStateDeath: ebiten.NewImageFromImage(deathImg),
+        CharStateHurt: ebiten.NewImageFromImage(hurtImg),
+        CharStateIdle: ebiten.NewImageFromImage(idleImg),
+        CharStateWalk: ebiten.NewImageFromImage(walkImg),
+    }
+}
 
+func NewCharacter(character string, pos Position, isCpu bool) *Character {
+    images := getImages(character)
+    sprites := make(map[CharState]Sprite)
+	sprites[CharStateAttack] = NewSprite(4, images[CharStateAttack])
+	sprites[CharStateDeath] = NewSprite(4, images[CharStateDeath])
+	sprites[CharStateHurt] = NewSprite(2, images[CharStateHurt])
+	sprites[CharStateIdle] = NewSprite(4, images[CharStateIdle])
+	sprites[CharStateWalk] = NewSprite(6, images[CharStateWalk])
+	
 	return &Character{
 		Hp:          100,
 		RemainingHp: 100,
