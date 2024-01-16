@@ -417,14 +417,14 @@ func (g *Game) Draw(screen *ebiten.Image) {
 		playerHpStr := fmt.Sprintf("HP %d/%d", g.player.remainingHp, g.player.hp)
 		textRect, _ = font.BoundString(smallFont, playerHpStr)
 		w = (textRect.Max.X - textRect.Min.X).Round()
-		x, y = (screenWidth/3)-(w/2), h*5
-		text.Draw(bgImg, playerHpStr, smallFont, x, y, colors.White)
+		x, y = (screenWidth/3)-(w/2), h*6
+		text.Draw(bgImg, playerHpStr, smallFont, x, y, colors.Grey)
 		// CPU HP
 		cpuHpStr := fmt.Sprintf("HP %d/%d", g.cpu.remainingHp, g.cpu.hp)
 		textRect, _ = font.BoundString(smallFont, cpuHpStr)
 		w = (textRect.Max.X - textRect.Min.X).Round()
-		x, y = ((screenWidth/3)*2)-(w/2), h*5
-		text.Draw(bgImg, cpuHpStr, smallFont, x, y, colors.White)
+		x, y = ((screenWidth/3)*2)-(w/2), h*6
+		text.Draw(bgImg, cpuHpStr, smallFont, x, y, colors.Grey)
 
 		// Sprites
 		g.player.DrawFrame(screen, g.count)
