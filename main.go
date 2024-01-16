@@ -84,14 +84,17 @@ const (
 )
 
 type Character struct {
-	hp        int
-	pts       int
-	pos       Position
-	state     CharState
-	sprites   map[CharState]Sprite
-	spriteCtr int
-	ctrStart  int
-	isCpu     bool
+	hp          int
+	remainingHp int
+	alive       bool
+	atk         int
+	pts         int
+	pos         Position
+	state       CharState
+	sprites     map[CharState]Sprite
+	spriteCtr   int
+	ctrStart    int
+	isCpu       bool
 }
 
 func NewCharacter(pos Position, isCpu bool) *Character {
@@ -136,13 +139,45 @@ func NewCharacter(pos Position, isCpu bool) *Character {
 	sprites[CharStateWalk] = NewSprite(6, ebiten.NewImageFromImage(walkImg))
 
 	return &Character{
-		hp:      100,
-		pts:     0,
-		pos:     pos,
-		sprites: sprites,
-		state:   CharStateIdle,
-		isCpu:   isCpu,
+		hp:          100,
+		remainingHp: 100,
+		alive:       true,
+		atk:         50,
+		pts:         0,
+		pos:         pos,
+		sprites:     sprites,
+		state:       CharStateIdle,
+		isCpu:       isCpu,
 	}
+}
+
+func (c *Character) ChangeState(state CharState, count int) {
+	c.state = state
+	spriteCtr := c.CurrentSprite().frameCount
+	if state == CharStateHurt {
+		spriteCtr *= 2
+	}
+	c.spriteCtr = spriteCtr
+	c.ctrStart = count
+}
+
+func (c *Character) Idle(count int) {
+	c.state = CharStateIdle
+	c.ctrStart = count
+}
+
+func (c *Character) StartAttack(count int) {
+	c.ChangeState(CharStateAttack, count)
+}
+
+func (c *Character) TakeDamage(count int, dmg int) {
+	c.ChangeState(CharStateHurt, count)
+	if c.remainingHp-dmg <= 0 {
+		c.remainingHp = 0
+	} else {
+		c.remainingHp -= dmg
+	}
+	fmt.Println("Char Remaining HP: ", c.remainingHp)
 }
 
 var (
@@ -157,21 +192,29 @@ func (p *Character) CurrentSprite() Sprite {
 func (p *Character) GetImgOpts() *ebiten.DrawImageOptions {
 	op := &ebiten.DrawImageOptions{}
 	if p.isCpu {
-		op.GeoM.Scale(-1, 1)
-		op.GeoM.Translate(p.pos.x+float64(frameWidth), p.pos.y)
+		op.GeoM.Scale(-2, 2)
+		op.GeoM.Translate(p.pos.x+float64(frameWidth*2), p.pos.y)
 	} else {
+		op.GeoM.Scale(2, 2)
 		op.GeoM.Translate(p.pos.x, p.pos.y)
 	}
 	return op
 }
 
-func (p *Character) DrawFrame(screen *ebiten.Image, count int) {
+func (c *Character) DrawFrame(screen *ebiten.Image, count int) {
 	// Move rectangle to new frame of sprite
-	pos := ((count-p.ctrStart) / 8) % p.CurrentSprite().frameCount
+	pos := ((count - c.ctrStart) / 8) % c.CurrentSprite().frameCount
+	if pos == c.CurrentSprite().frameCount-1 && c.state == CharStateDeath {
+		c.alive = false
+	}
+	if !c.alive {
+		// Hold on last frame of death animation
+		pos = c.CurrentSprite().frameCount - 1
+	}
 	sx := pos * frameWidth
 	rect := image.Rect(sx, 0, sx+frameWidth, frameHeight)
-	img := p.CurrentSprite().img.SubImage(rect).(*ebiten.Image)
-	op := p.GetImgOpts()
+	img := c.CurrentSprite().img.SubImage(rect).(*ebiten.Image)
+	op := c.GetImgOpts()
 
 	screen.DrawImage(img, op)
 }
@@ -220,13 +263,17 @@ type Game struct {
 func (g *Game) Init() {
 	g.initialized = true
 	g.state = MAIN_MENU
+}
+
+func (g *Game) SetupBattle() {
+	g.state = BATTLE
 	g.player = NewCharacter(Position{
-		x: (screenWidth / 3) - (float64(frameWidth) / 2),
-		y: (screenHeight / 2) - (float64(frameHeight) / 2),
+		x: (screenWidth / 3) - float64(frameWidth),
+		y: (screenHeight / 2) - float64(frameHeight),
 	}, false)
 	g.cpu = NewCharacter(Position{
-		x: (screenWidth / 3 * 2) - (float64(frameWidth) / 2),
-		y: (screenHeight / 2) - (float64(frameHeight) / 2),
+		x: (screenWidth / 3 * 2) - float64(frameWidth),
+		y: (screenHeight / 2) - float64(frameHeight),
 	}, true)
 }
 
@@ -264,15 +311,17 @@ func (g *Game) Update() error {
 			resetBgImg()
 			g.lastState = g.state
 			fmt.Printf("STATE: %s --to-> %s (count %d)\n", g.state.ToString(), BATTLE.ToString(), g.count)
-			g.state = BATTLE
+			g.SetupBattle()
 		}
 	case BATTLE:
-		if g.player.hp <= 0 {
+		fmt.Println("Player alive?", g.player.alive)
+		fmt.Println("CPU alive?", g.cpu.alive)
+		if !g.player.alive {
 			resetBgImg()
 			g.lastState = g.state
 			fmt.Printf("STATE: %s --to-> %s (count %d)\n", g.state.ToString(), LOST.ToString(), g.count)
 			g.state = LOST
-		} else if g.cpu.hp <= 0 {
+		} else if !g.cpu.alive {
 			resetBgImg()
 			g.lastState = g.state
 			fmt.Printf("STATE: %s --to-> %s (count %d)\n", g.state.ToString(), WON.ToString(), g.count)
@@ -281,15 +330,22 @@ func (g *Game) Update() error {
 
 		if inpututil.IsKeyJustPressed(ebiten.KeySpace) && g.player.state != CharStateAttack {
 			fmt.Println("ATK start")
-			g.player.state = CharStateAttack
-			g.player.spriteCtr = 4
-			g.player.ctrStart = g.count
+			g.player.StartAttack(g.count)
+		} else if g.player.state == CharStateAttack && g.player.spriteCtr == 0 {
+			if g.cpu.state != CharStateHurt && g.cpu.state != CharStateDeath {
+				g.cpu.TakeDamage(g.count, g.player.atk)
+			}
+		} else if g.cpu.state == CharStateHurt && g.cpu.spriteCtr == 0 && g.cpu.remainingHp == 0 {
+			g.cpu.ChangeState(CharStateDeath, g.count)
 		}
 
 		if g.player.state != CharStateIdle && g.player.spriteCtr == 0 {
 			fmt.Println("Action finish")
-			g.player.state = CharStateIdle
-			g.player.ctrStart = g.count
+			g.player.Idle(g.count)
+		}
+		if g.cpu.state != CharStateIdle && g.cpu.spriteCtr == 0 {
+			fmt.Println("CPU:Action finish")
+			g.cpu.Idle(g.count)
 		}
 	case WON:
 		if inpututil.IsKeyJustPressed(ebiten.KeyEnter) {
@@ -348,21 +404,35 @@ func (g *Game) Draw(screen *ebiten.Image) {
 		w, h := (textRect.Max.X - textRect.Min.X).Round(), (textRect.Max.Y - textRect.Min.Y).Round()
 		x, y := (screenWidth/2)-(w/2), h*2
 		text.Draw(bgImg, heading, smallFont, x, y, colors.Red)
+
 		// Subtext
 		textRect, _ = font.BoundString(smallFont, subtext)
 		w = (textRect.Max.X - textRect.Min.X).Round()
 		x, y = (screenWidth/2)-(w/2), h*4
 		text.Draw(bgImg, subtext, smallFont, x, y, colors.Black)
+
+		// Health Bars
+		// TODO: show health as simple "remaining/starting" display
+
 		// Sprites
 		g.player.DrawFrame(screen, g.count)
-		if g.player.state == CharStateAttack {
+		switch g.player.state {
+		case CharStateAttack:
 			if (g.count-g.player.ctrStart)%8 == 0 {
 				g.player.spriteCtr -= 1
 			}
-
-			fmt.Println("ATK tick :: ", g.player.spriteCtr)
+			break
 		}
+
 		g.cpu.DrawFrame(screen, g.count)
+		switch g.cpu.state {
+		case CharStateHurt:
+			if (g.count-g.cpu.ctrStart)%8 == 0 {
+				fmt.Printf("CPU: ct DECREMENT %d -> %d\n", g.cpu.spriteCtr, g.cpu.spriteCtr-1)
+				g.cpu.spriteCtr -= 1
+			}
+			break
+		}
 	case WON:
 		heading, subtext := "VICTORY!", "Press enter to return to main menu"
 		baseFont := getBaseFont()
