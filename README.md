@@ -1,5 +1,10 @@
 # Cats Vs. Dogs
 
-Simple horizontal battle game pitted between two of the oldest rivals
+Simple battle game pitted between two of the oldest rivals
 
-**Goal:** Make a game using Go and [Ebitengine](github.com/hajimehoshi/ebiten)
+**Goal:** 
+- [x] Make a stupid simple game using Go and [Ebitengine](github.com/hajimehoshi/ebiten)
+
+4 Playable Characters! Wow! 😲
+Scenic battleground! 🪓
+You always win! 🎉
